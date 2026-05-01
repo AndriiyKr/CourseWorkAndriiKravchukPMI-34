@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 
+// Універсальний пошук змінних
 const deepFind = (obj, keys) => {
   if (!obj || typeof obj !== 'object') return null;
   for (const key of keys) {
@@ -50,6 +51,7 @@ const PDFReport = forwardRef(({ nodes = [], edges = [], graphStats, solutions, e
     independence = Array.isArray(indArr) ? indArr.length : "н/д";
   }
 
+  // 2. ОБРОБКА ШЛЯХІВ ЗГІДНО З САЙДБАРОМ
   let eulerObj = eulerianData || safeSolutions?.euler || safeStats?.euler;
   let hamilObj = hamiltonianData || safeSolutions?.hamilton || safeStats?.hamilton;
 
@@ -193,11 +195,11 @@ const PDFReport = forwardRef(({ nodes = [], edges = [], graphStats, solutions, e
     );
   };
 
-  // 4. УНІВЕРСАЛЬНИЙ РЕНДЕР ТАБЛИЦЬ (ІЗ ПЕРЕНОСОМ НА НОВИЙ РЯДОК)
+  // 4. УНІВЕРСАЛЬНИЙ РЕНДЕР ТАБЛИЦЬ (ІЗ ПЕРЕНОСОМ НА НОВИЙ РЯДОК ТА ДИНАМІЧНИМИ ПІДПИСАМИ)
   const renderTable = (matrix, title, type = 'adjacency') => {
     if (!matrix || !Array.isArray(matrix) || matrix.length === 0) return null;
     
-    // Список суміжності обробляємо окремо, бо він має лише 2 колонки
+    // Список суміжності обробляємо окремо
     if (type === 'list') {
       return (
         <div style={{ marginBottom: '35px', pageBreakInside: 'avoid', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -228,30 +230,47 @@ const PDFReport = forwardRef(({ nodes = [], edges = [], graphStats, solutions, e
 
     // ЛОГІКА РОЗБИТТЯ (CHUNKING) ДЛЯ ШИРОКИХ МАТРИЦЬ
     const totalCols = matrix[0].length;
-    // Інцидентність має ширші заголовки {v1; v2}, тому ріжемо по 6. Суміжність - по 12.
     const maxCols = type === 'incidence' ? 6 : 12; 
     const chunks = [];
 
     for (let i = 0; i < totalCols; i += maxCols) {
-      chunks.push({
-        start: i,
-        end: Math.min(i + maxCols, totalCols)
-      });
+      chunks.push({ start: i, end: Math.min(i + maxCols, totalCols) });
     }
 
     return (
       <div style={{ marginBottom: '35px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
         {chunks.map((chunk, chunkIdx) => {
-          // Формуємо заголовки стовпців для поточного шматка
+          
+          // ФОРМУЄМО ДИНАМІЧНІ ЗАГОЛОВКИ СТОВПЦІВ ДЛЯ ШМАТКА
           const headerCells = [];
           for (let j = chunk.start; j < chunk.end; j++) {
             if (type === 'incidence') {
-              const edge = edges[j];
-              let colLabel = `e${j}`;
-              if (edge) {
-                const fromLbl = nodes.find(n => n.id === edge.from)?.label || `v${edge.from}`;
-                const toLbl = nodes.find(n => n.id === edge.to)?.label || `v${edge.to}`;
-                colLabel = `{${fromLbl}; ${toLbl}}`;
+              const connected = [];
+              for (let r = 0; r < matrix.length; r++) {
+                const val = Number(matrix[r][j]);
+                if (val !== 0) connected.push({ rowIdx: r, val: val });
+              }
+
+              let colLabel = `e${j + 1}`;
+              if (connected.length === 2) {
+                let uIdx = connected[0].rowIdx;
+                let vIdx = connected[1].rowIdx;
+                
+                if (isDirectedGraph) {
+                  const tail = connected.find(c => c.val === -1);
+                  const head = connected.find(c => c.val === 1);
+                  if (tail && head) {
+                    uIdx = tail.rowIdx;
+                    vIdx = head.rowIdx;
+                  }
+                }
+                
+                const uLbl = nodes[uIdx]?.label || `v${uIdx}`;
+                const vLbl = nodes[vIdx]?.label || `v${vIdx}`;
+                colLabel = isDirectedGraph ? `(${uLbl}; ${vLbl})` : `{${uLbl}; ${vLbl}}`;
+              } else if (connected.length === 1) {
+                const uLbl = nodes[connected[0].rowIdx]?.label || `v${connected[0].rowIdx}`;
+                colLabel = `{${uLbl}; ${uLbl}}`;
               }
               headerCells.push(colLabel);
             } else {
@@ -267,7 +286,6 @@ const PDFReport = forwardRef(({ nodes = [], edges = [], graphStats, solutions, e
                     {title}
                   </h3>
                 )}
-                {/* Підпис "Продовження" у правому куті для розбитих таблиць */}
                 {chunkIdx > 0 && (
                   <div style={{ textAlign: 'right', fontSize: '10pt', fontStyle: 'italic', color: '#64748b', marginTop: '5px' }}>
                     Продовження матриці {type === 'incidence' ? 'інцидентності' : 'суміжності'}...
@@ -288,7 +306,6 @@ const PDFReport = forwardRef(({ nodes = [], edges = [], graphStats, solutions, e
                 </thead>
                 <tbody>
                   {matrix.map((row, i) => {
-                    // Беремо тільки ту частину рядка, яка відповідає за поточний шматок
                     const rowSlice = row.slice(chunk.start, chunk.end);
                     return (
                       <tr key={i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
