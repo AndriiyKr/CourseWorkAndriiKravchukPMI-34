@@ -52,15 +52,49 @@ const MatrixDisplay = ({ adjMatrix, incMatrix, nodes = [], edges = [], isDirecte
     </section>
   );
 
-  const edgeLabels = (edges || []).map(e => {
-    const uNode = nodes.find(n => n.id === e.from);
-    const vNode = nodes.find(n => n.id === e.to);
-    const u = uNode ? uNode.label : '?';
-    const v = vNode ? vNode.label : '?';
-    return isDirected ? `(${u},${v})` : `{${u},${v}}`;
-  });
-
   const nodeLabels = nodes.map(n => n.label);
+
+  // ДИНАМІЧНЕ ФОРМУВАННЯ ПІДПИСІВ РЕБЕР НА ОСНОВІ ДАНИХ МАТРИЦІ
+  const edgeLabels = [];
+  if (incMatrix && incMatrix.length > 0) {
+    const numCols = incMatrix[0].length;
+    const numRows = incMatrix.length;
+
+    for (let j = 0; j < numCols; j++) {
+      const connected = [];
+      for (let i = 0; i < numRows; i++) {
+        const val = Number(incMatrix[i][j]);
+        if (val !== 0) {
+          connected.push({ rowIdx: i, val: val });
+        }
+      }
+
+      if (connected.length === 2) {
+        let uIdx = connected[0].rowIdx;
+        let vIdx = connected[1].rowIdx;
+
+        // Врахування напрямку для орієнтованого графа (-1 -> 1)
+        if (isDirected) {
+          const tail = connected.find(c => c.val === -1);
+          const head = connected.find(c => c.val === 1);
+          if (tail && head) {
+            uIdx = tail.rowIdx;
+            vIdx = head.rowIdx;
+          }
+        }
+
+        const uLabel = nodeLabels[uIdx] || `v${uIdx}`;
+        const vLabel = nodeLabels[vIdx] || `v${vIdx}`;
+        edgeLabels.push(isDirected ? `(${uLabel},${vLabel})` : `{${uLabel},${vLabel}}`);
+      } else if (connected.length === 1) {
+        // Петля
+        const uLabel = nodeLabels[connected[0].rowIdx] || `v${connected[0].rowIdx}`;
+        edgeLabels.push(`{${uLabel},${uLabel}}`);
+      } else {
+        edgeLabels.push(`e${j + 1}`); // Запасний варіант
+      }
+    }
+  }
 
   return (
     <div className="divide-y divide-slate-200 font-sans">
